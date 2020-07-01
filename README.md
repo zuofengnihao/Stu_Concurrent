@@ -77,9 +77,22 @@ Synchronized同步代码块是使用monitorenter和monitorexit指令实现的。
 
 * Mark Word 32/64bit 存储对象的hashCode或锁信息等  
 * Class Metadata Address 32/64bit 存储到对象类型数据的指针  
-* Array Length 32/32bit 数组长度（如果当前对象是数组）
+* Array Length 32/32bit 数组长度（如果当前对象是数组）  
 
-    
+64位虚拟机 Mark Word：
+* 1bit 是否偏向锁 
+* 2bit 锁标志位
+* 4bit GC分代年龄
+* 31bit hashcode    
+* 25bit unused
+
+#### 2.2.2 锁定升级与对比
+
+1. 偏向锁：  
+   
+2. 轻量级锁
+3. 锁的优缺点
+
 
 
 
