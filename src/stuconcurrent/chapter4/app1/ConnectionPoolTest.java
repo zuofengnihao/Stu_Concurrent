@@ -67,8 +67,8 @@ public class ConnectionPoolTest {
                 } finally {
                     count--;
                 }
-                end.countDown();
             }
+            end.countDown();
         }
     }
 }
