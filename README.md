@@ -544,3 +544,64 @@ join()方法的逻辑结构与4.3.3节中描述的等待/通知经典范式一�
 `例子：c4.a1.*`
 
 #### 4.4.3 线程池技术及其示例
+`例子：c4.a2。*`
+
+#### 4.4.4 一个基于线程池技术的简单web服务器
+`例子：c4.a3.*`
+
+## 第五章 Java中的锁
+### 5.1 Lock接口
+Lock的使用方式:
+```java
+Lock lock = new ReentrantLock();
+lock.lock();
+try{
+} finally {
+    lock.unlock();
+}
+```
+在finally块中释放锁，目的是保证在获取到锁之后，最终锁能被释放。不要将获取锁的过程写在try块中，因为如果在获取锁时发生了异常，会导致锁无故释放。  
+
+相对Lock，Synchronized关键字不具备的特性：
+- 尝试非阻塞地获取锁：当线程尝试获取锁，如果这一刻锁没有被其他线程获取，则成功获取并持有锁
+- 能被中断的获取锁：与synchronized不同，获取到锁的线程能够响应中断，当获取到锁的线程被中断时，中断异常将会被抛出，同时锁会被释放
+- 超时获取锁：在指定的截止时间之间获取锁，如果截止时间到了扔无法获取锁，则返回
+
+Lock的API
+- `void lock()`：获取锁，调用该方法当前线程将会获取锁，当锁获得后，从该方法返回
+- `void lockInterruptibly() throws InterruptedException`：可中断的获取锁，和`lock()`方法不同之处在于该方法会响应中断，即在锁的获取中可以中断当前线程
+- `boolean tryLock()`：尝试非阻塞的获取锁，调用该方法后立刻返回，如果能获取则返回true，否则返回false
+- `boolen tryLock(long time,TimeUnit unit) throws InterruptedException`：超时的获取锁，当前线程在以下三种情况会返回：
+   1. 当前线程在超时时间内获得了锁
+   2. 当前线程在超时时间内被中断
+   3. 超时时间结束，返回false
+- `void unlock()`：释放锁
+- `Condition newCondition()`：获取等待通知组件，该组件和当前的锁绑定，当前线程只有获得了锁，才能被调用该组件的`await()`方法，而调用后，当前线程将释放锁
+
+### 5.2 队列同步器(AQS)
+队列同步器`AbstractQueuedSynchronizer(AQS)`：是用来构建锁或者其他同步组件的基础框架，它使用了一个int变量表示同步状态，通过内置的FIFO队列完成资源获取线程的排队工作，并发包作者Doug Lea期望它能够实现大部分同步需求的基础。  
+
+#### 5.2.1 队列同步器的接口示例
+重写同步器指定方法时，需要使用同步器提供的如下3个方法来访问修改同步状态：
+* `getState()`：获取当前同步状态
+* `setState()`：设置当前同步状态
+* `compareAndSetState(int expect,int update)`：使用CAS设置当前状态，改方法能保证状态设置的原子性
+
+同步器可重写的方法
+* `protected boolean tryAcquire(int arg)`：独占式获取同步状态，实现该方法需要查询当前状态并判断同步状态是否符合预期，然后再进行CAS设置同步状态
+* `protected boolean tryRelease(int arg)`：独占式释放同步状态，等待获取同步状态的线程将会有机会获取同步状态
+* `protected int tryAcquireShared(int arg)`：共享式获取同步状态，返回大于等于0的值，表示获取成功，反之，获取失败
+* `protected boolean tryReleaseShared(int arg)`：共享式释放同步状态
+* `protected boolean isHeldExclusively()`：当前同步器是否在独占模式下被线程占用，一般该方法表示是否被当前线程所独占
+
+同步器的模板方法
+* `void acquire(int arg)`：独占式获取同步状态，如果当前线程获取同步状态成功，则由该方法返回，否则，将会进入同步队列等待，该方法将会调用重写的`tryAcquire(int arg)`方法
+* `void acquireInterruptibly(int arg)`：与`acquire(int arg)`相同，但是该方法响应中断，当前线程未获取到同步状态而进入同步队列中，如果当前线程被中断，则改方法会抛出InterruptedException并返回
+* `boolean tyrAcquireNanos(int arg,long nanos)`：在`acquireInterruptibly(int arg)`基础上增加了超时限制，如果当线程在超时时间内没有获取到同步状态，那么将会返回false，如果获取到了返回true
+* `void acquireShared(int arg)`：共享式的获取同步状态，如果当前线程未获取到同步状态，将会进入同步队列等待，与独占式获取的主要区别是同一刻可以有多少个线程获取到同步状态
+* `void acquireSharedInterruptibly(int arg)`：与`void acquireShared(int arg)`相同，该方法响应中断
+* `boolean tryAcquireSharedNanos(int arg,long nanos)`：在`void acquireShared(int arg)`基础上增加了超时限制
+* `boolean release(int arg)`：独占式的释放同步状态，该方法会在释放同步状态之后，将同步状态中第一个节点包含的线程唤醒
+* `boolean releaseShared(int arg)`：共享式释放同步状态
+* `Collection<Thread> getQueuedThreads()`：获取等待在同步队列上的线程集合
+
