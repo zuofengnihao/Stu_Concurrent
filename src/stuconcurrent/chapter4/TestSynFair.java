@@ -1,34 +1,46 @@
 package stuconcurrent.chapter4;
 
+import java.util.Arrays;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
 public class TestSynFair {
 
     public static void main(String[] args) throws InterruptedException {
-        Runner runner = new Runner();
+        MyList list = new MyList();
         for (int i = 0; i < 10; i++) {
-            Thread t = new Thread(runner, "thread-" + i);
+            final int value = i + 1;
+            Thread t = new Thread(() -> {
+                try {
+                    list.addItem(value);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }, "thread-" + i);
             t.start();
             Thread.sleep(10);
         }
         System.out.println(new Date().getTime() + " main方法结束");
     }
 
-    private static class Runner implements Runnable {
+    private static class MyList {
 
-        @Override
-        public void run() {
-            System.out.println(new Date().getTime() + " " + Thread.currentThread().getName() + " 进入方法");
+        private int index = 0;
+
+        private int[] list = new int[10];
+
+        public void addItem(int value) throws InterruptedException {
+            String name = Thread.currentThread().getName();
+            System.out.println(new Date().getTime() + " " + name + " 进入addItem()方法...");
             synchronized (this) {
-                System.out.println(new Date().getTime() + " " + Thread.currentThread().getName() + " 进入同步代码，没进入同步代码的进入同步队列");
-                try {
-                    TimeUnit.SECONDS.sleep(2);
-                    System.out.println(new Date().getTime() + " " + Thread.currentThread().getName() + " 退出同步代码并结束线程");
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+                System.out.println(new Date().getTime() + " " + name + " 进入同步代码块...");
+                if (index >= list.length) index = 0;
+                list[index++] = value;
+                TimeUnit.SECONDS.sleep(2);
             }
+            System.out.println(new Date().getTime() + " " + name + " 添加完成");
+            System.out.println(Arrays.toString(list));
         }
+
     }
 }
