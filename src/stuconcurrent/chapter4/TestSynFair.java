@@ -8,7 +8,7 @@ public class TestSynFair {
 
     public static void main(String[] args) throws InterruptedException {
         MyList list = new MyList();
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 20; i++) {
             final int value = i + 1;
             Thread t = new Thread(() -> {
                 try {
@@ -16,9 +16,9 @@ public class TestSynFair {
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-            }, "thread-" + i);
+            }, "thread-" + value);
             t.start();
-            Thread.sleep(10);
+            Thread.sleep(1);
         }
         System.out.println(new Date().getTime() + " main方法结束");
     }
@@ -36,7 +36,10 @@ public class TestSynFair {
                 System.out.println(new Date().getTime() + " " + name + " 进入同步代码块...");
                 if (index >= list.length) index = 0;
                 list[index++] = value;
-                TimeUnit.SECONDS.sleep(2);
+                if (value == 1) {
+                    TimeUnit.SECONDS.sleep(2);
+                    System.out.println("=============================================");
+                }
             }
             System.out.println(new Date().getTime() + " " + name + " 添加完成");
             System.out.println(Arrays.toString(list));
