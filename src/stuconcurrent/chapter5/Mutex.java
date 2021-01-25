@@ -68,4 +68,12 @@ public class Mutex implements Lock {
     public Condition newCondition() {
         return sync.newCondition();
     }
+
+    public boolean isLocked() {
+        return sync.isHeldExclusively();
+    }
+
+    public boolean hasQueueThreads() {
+        return sync.hasQueuedThreads();
+    }
 }
