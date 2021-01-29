@@ -41,6 +41,7 @@ public class Mutex implements Lock {
 
     @Override
     public void lock() {
+        System.out.println(Thread.currentThread().getName() + " : lock");
         sync.acquire(1);
     }
 
