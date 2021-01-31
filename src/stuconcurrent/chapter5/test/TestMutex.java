@@ -1,10 +1,11 @@
-package stuconcurrent.chapter5;
+package stuconcurrent.chapter5.test;
 
 import stuconcurrent.chapter4.SleepUtils;
+import stuconcurrent.chapter5.Mutex;
 
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class Test {
+public class TestMutex {
 
     public static void main(String[] args) {
         Mutex mutex = new Mutex();
@@ -12,7 +13,7 @@ public class Test {
             mutex.lock();
             try {
                 System.out.println(Thread.currentThread().getName() + " : 任务开始！");
-                SleepUtils.second(60 * 60);
+                SleepUtils.second(1);
             } finally {
                 mutex.unlock();
             }
@@ -21,7 +22,7 @@ public class Test {
         new Thread(() -> {
             mutex.lock();
             try {
-                SleepUtils.second(60 * 60);
+                SleepUtils.second(1);
             } finally {
                 mutex.unlock();
             }
@@ -30,7 +31,7 @@ public class Test {
         new Thread(() -> {
             mutex.lock();
             try {
-                SleepUtils.second(60 * 60);
+                SleepUtils.second(1);
             } finally {
                 mutex.unlock();
             }

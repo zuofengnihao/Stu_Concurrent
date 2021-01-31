@@ -490,7 +490,7 @@ ContentionList并不是一个真正的Queue，而只是一个虚拟队列，原�
 EntryList与ContentionList逻辑上同属等待队列，ContentionList会被线程并发访问，为了降低对ContentionList队尾的争用，而建立EntryList。Owner线程在unlock时会从ContentionList中迁移线程到EntryList，并会指定EntryList中的某个线程（一般为Head）为Ready（OnDeck）线程。Owner线程并不是把锁传递给OnDeck线程，只是把竞争锁的权利交给OnDeck，OnDeck线程需要重新竞争锁。这样做虽然牺牲了一定的公平性，但极大的提高了整体吞吐量，在Hotspot中把OnDeck的选择行为称之为“竞争切换”。  
 OnDeck线程获得锁后即变为owner线程，无法获得锁则会依然留在EntryList中，考虑到公平性，在EntryList中的位置不发生变化（依然在队头）。如果Owner线程被wait方法阻塞，则转移到WaitSet队列；如果在某个时刻被notify/notifyAll唤醒，则再次转移到EntryList。   
 
-`例子：TestSynFair` 在测试中，我们发现线程是按逆序执行的及 FILO先进后出 原因在于 ContentionList虚拟队列
+`例子：c4.TestSynFair` 在测试中，我们发现线程是按逆序执行的及 FILO先进后出 原因在于 ContentionList虚拟队列
 
 #### 4.3.2 等待/通知机制
 1. 使用wait()、notify()和notifyAll()时需要先对调用对象加锁。
@@ -517,7 +517,7 @@ synchronized(对象) {
 2. 改变条件。
 3. 通知所有等待在对象上的线程。
 ```java
-sychronized(对象) {
+synchronized(对象) {
     改变条件;
     对象.notifyAll();
 }
@@ -618,14 +618,49 @@ Lock的API
 `例子：c5.Mutex`
 
 #### 5.2.2 队列同步器的实现分析
-1. 同步队列：同步器依赖内部的同步队列（一个FIFO的双向队列），获取同步状态失败的线程，会构造队列节点node以尾部添加的方式进入同步队列并阻塞线程。为保证队列的线程安全，会使用CAS的设置尾节点的方法：compareAndSetTail(Node expect,Node update)。节点属性如下
-* int waitStatus：等待状态，包含如下状态
-  1. CANCELLED，值为1，由于在同步队列中等待超时或者被中断，需要从同步队列中取消等待，节点进入该状态将不会变化。
-  2. SIGNAL，值为-1，后继节点的线程处于等待状态，而当前节点的线程如果释放了同步状态或者被取消了，将会通知后继节点，使后继节点的线程得以运行
-  3. CONDITION，值为-2，节点在等待队列中，节点线程等待在Condition上，当其他线程对Condition调用了signal()方法后，该节点将会从等待队列中转移到同步队列中，加入到对同步状态的获取中。
-  4. PROPAGET，值为-3，表示下一次共享式同步状态获取会无条件地被传播下去
-  5. INITIAL，值为0，初始状态
-* Node prev：前驱节点，当节点加入同步队列时被设置（尾部添加）
-* Node next：后继节点
-* Node nextWaiter：等待队列中的后继节点。如果当前节点时共享的，那么这个字段是一个SHARED常量，也就是说节点类型（独占和共享）和等待队列中的后继节点公用一个字段
-* Thread thread：获取同步状态的线程
+1. 同步队列：同步器依赖内部的同步队列（一个FIFO的双向队列），获取同步状态失败的线程，会构造队列节点node以尾部添加的方式进入同步队列并阻塞线程。为保证队列的线程安全，会使用CAS的设置尾节点的方法：`compareAndSetTail(Node expect,Node update)`。节点属性如下
+   * int waitStatus：等待状态，包含如下状态
+     1. CANCELLED，值为1，由于在同步队列中等待超时或者被中断，需要从同步队列中取消等待，节点进入该状态将不会变化。
+     2. SIGNAL，值为-1，后继节点的线程处于等待状态，而当前节点的线程如果释放了同步状态或者被取消了，将会通知后继节点，使后继节点的线程得以运行
+     3. CONDITION，值为-2，节点在等待队列中，节点线程等待在Condition上，当其他线程对Condition调用了signal()方法后，该节点将会从等待队列中转移到同步队列中，加入到对同步状态的获取中。
+     4. PROPAGET，值为-3，表示下一次共享式同步状态获取会无条件地被传播下去
+     5. INITIAL，值为0，初始状态
+   * Node prev：前驱节点，当节点加入同步队列时被设置（尾部添加）
+   * Node next：后继节点
+   * Node nextWaiter：等待队列中的后继节点。如果当前节点时共享的，那么这个字段是一个SHARED常量，也就是说节点类型（独占和共享）和等待队列中的后继节点公用一个字段
+   * Thread thread：获取同步状态的线程
+   
+   !*注意! 第一次未获取到同步状态的线程 会使用`compareAndSetHead(Node node)`方法构造一个新节点，该节点的`thread=null`并使`head`和`tail`都等于该节点。
+
+2. 独占式同步状态获取与释放  
+   总结：在获取同步状态时，同步器维 护一个同步队列，获取状态失败的线程都会被加入到队列中（死循环cas设置成尾节点）并在队列中进行自旋；移出队列 （或停止自旋）的条件是前驱节点为头节点且成功获取了同步状态。在释放同步状态时，同步 器调用tryRelease(int arg)方法释放同步状态，然后唤醒头节点的后继节点。`独占式获取锁.jpg`
+   
+3. 共享式样获取同步状态与释放  
+   
+   读读共享，读写互斥，写写互斥。
+   1. 当共享式获取同步状态的线程获取到同步状态时，允许所有共享式获取同步状态的线程进入，但不允许独占式获取同步状态的线程进入。
+   2. 当独占式获取同步状态的线程获取到同步状态时，任何线程都不允许获取同步状态。  
+   
+   共享式获取与独占获取的不同：
+   1. 共享式获取同步状态时，判断前置节点是否是头节点之后，获取同步状态返回值是否大于0。
+      ```java
+        //独占式判断
+        if (p == head && tryAcquire()) {
+              ....
+        }
+        //共享式获取
+        if (p == head) {
+            int r = tryAcquireShard();
+            if (r > 0) {
+                 ....
+            }
+        }
+      ```
+   2. 共享式释放锁需要cas操作保证线程安全，独占式不需要，因为共享式多线程访问，独占式永远只有一个线程来释放锁。
+   
+4. 独占式超时获取同步状态  
+   `doAcquireNanos(int arg,long nanosTimeout)` 和独占式获取同步状态`acquire(int args)`在流程上非常相似，其主要区别在于未获取到同步状 态时的处理逻辑。acquire(int args)在未获取到同步状态时，将会使当前线程一直处于等待状 态，而doAcquireNanos(int arg,long nanosTimeout)会使当前线程等待nanosTimeout纳秒，如果当 前线程在nanosTimeout纳秒内没有获取到同步状态，将会从等待逻辑中自动返回。`独占式超时获取同步状态.jpg`
+   
+5. 自定义同步组件-TwinsLock  
+   设计一个允许2个线程同时获取同步状态的锁  
+   `例子:c5.TwinsLock`
