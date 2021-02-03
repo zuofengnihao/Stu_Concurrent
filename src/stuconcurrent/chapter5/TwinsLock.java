@@ -11,23 +11,24 @@ public class TwinsLock implements Lock {
 
     @Override
     public void lock() {
-        sync.tryAcquireShared(1);
+        sync.acquireShared(1);
     }
 
     @Override
     public void lockInterruptibly() throws InterruptedException {
-        sync.acquireInterruptibly(1);
+        sync.acquireSharedInterruptibly(1);
     }
 
     @Override
     public boolean tryLock() {
         int i = sync.tryAcquireShared(1);
-        return i >= 0;
+        if (i < 0) return false;
+        return true;
     }
 
     @Override
     public boolean tryLock(long time, TimeUnit unit) throws InterruptedException {
-        sync.tryAcquireSharedNanos(1, unit.toMillis(time));
+        return sync.tryAcquireSharedNanos(1, unit.toNanos(time));
     }
 
     @Override
@@ -42,30 +43,33 @@ public class TwinsLock implements Lock {
 
     static class Sync extends AbstractQueuedSynchronizer {
 
-        Sync (int count) {
-            if (count <= 0) {
-                throw new IllegalArgumentException("count must large than zero");
-            }
-            setState(count);
+        Sync(int status) {
+            setState(status);
         }
 
         @Override
         protected int tryAcquireShared(int arg) {
-            for(;;) {
-                int current = getState();
-                int newStatus = current - arg;
-                if (newStatus < 0 || compareAndSetState(current, newStatus)) {
-                    return newStatus;
+            // 此处设计了10次自旋 不然无法实现tryLock()
+            for (int i = 0; i < 10; i++) {
+                int currentState = getState();
+                int newState = currentState - arg;
+                if (newState < 0 || compareAndSetState(currentState, newState)) {
+                    return newState;
                 }
             }
-        }
-        
-        @Override
-        protected boolean tryReleaseShared(int arg) {
-            return super.tryReleaseShared(arg);
+            return -1;
         }
 
-        Condition newCondition() {
+        @Override
+        protected boolean tryReleaseShared(int arg) {
+            for (;;) {
+                int currentState = getState();
+                int newState = currentState + arg;
+                if (compareAndSetState(currentState, newState)) return true;
+            }
+        }
+
+        public Condition newCondition() {
             return new ConditionObject();
         }
     }

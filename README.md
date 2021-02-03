@@ -663,4 +663,104 @@ Lock的API
    
 5. 自定义同步组件-TwinsLock  
    设计一个允许2个线程同时获取同步状态的锁  
-   `例子:c5.TwinsLock`
+   `例子:c5.TwinsLock`  
+   sync 必须重写 `tryAcquire(int arg) tryAcquireShared(int arg)` AQS中在final方法`acquire(int arg) acquireShared(int arg)`中都会调用自己重写的`try...()`方法
+
+### 5.3 重入锁
+`synchronized`隐式支持重入
+
+#### 5.3.1 实现重入 ReentrantLock
+1. 线程再次获取锁。每次获取 +1。
+2. 锁的最终释放。释放一次 -1，释放至0，其他线程方可进入。
+
+#### 5.3.2 公平与非公平
+```java
+//公平锁
+protected final boolean tryAcquire(int acquires) {
+    final Thread current = Thread.currentThread();
+    int c = getState();
+    if (c == 0) {
+        if (!hasQueuedPredecessors() &&  // 与公平锁唯一的不同在此，判断是否有前驱节点
+            compareAndSetState(0, acquires)) {
+            setExclusiveOwnerThread(current);
+            return true;
+        }
+    }
+    else if (current == getExclusiveOwnerThread()) {
+        int nextc = c + acquires;
+        if (nextc < 0)
+            throw new Error("Maximum lock count exceeded");
+        setState(nextc);
+        return true;
+    }
+    return false;
+}
+//非公平锁
+final boolean nonfairTryAcquire(int acquires) {
+    final Thread current = Thread.currentThread();
+    int c = getState();
+    if (c == 0) {
+        if (compareAndSetState(0, acquires)) {
+            setExclusiveOwnerThread(current);
+            return true;
+        }
+    }
+    else if (current == getExclusiveOwnerThread()) {
+        int nextc = c + acquires;
+        if (nextc < 0) // overflow
+            throw new Error("Maximum lock count exceeded");
+        setState(nextc);
+        return true;
+    }
+    return false;
+}                      
+```
+`示例：c5.TestReentrantLock.java`  
+
+总结：公平性锁保证了锁的获取按照FIFO原则，而代价是进行大量的线程切换。非公平性锁虽 然可能造成线程“饥饿”，但极少的线程切换，保证了其更大的吞吐量。
+
+### 5.4 读写锁 ReentrantReadWriteLock
+特性：
+1. 公平性选择：默认非公平，支持公平，吞吐量非公平>公平
+2. 重入性：读线程在获取读锁后，可以再次获取读锁。写线程在获取写锁后，可以再次获取锁，也可获取读锁。
+3. 锁降级：遵循获取写锁、获取读锁再释放写锁的次序，写锁能够降级成为读锁。
+
+#### 5.4.1 读写锁的接口示例
+* `int getReadLockCount()`: 返回当前读锁被获取的次数，该次数不等于获取读锁的线程数。
+* `int getReadHoldCount()`: 返回当前线程获取读锁的次数。Java6中加入，使用ThreadLocal保存
+* `boolean isWriteLock()`: 判断写锁还是读锁
+* `int getWriteHoldCount()`: 返回当前写锁被获取次数  
+
+`示例：c4.Cache.java`
+
+#### 5.4.2 读写锁的实现分析
+
+1. 读写状态的设计  
+   
+   高位表示读，低位表示写。使用位移运算来获取状态，获取写`write = state & 0x0000FFFF`，获取读`read = state >>> 16`
+
+2. 写锁的获取与释放
+   
+   ```java
+   protected final boolean tryAcquire(int acquires) {
+       Thread current = Thread.currentThread();
+       int c = getState();
+       int w = exclusiveCount(c); // c & 0x0000FFFF 低位值（记录写）
+       if (c != 0) {
+           // (Note: if c != 0 and w == 0 then shared count != 0)即存在读锁，或者
+           if (w == 0 || current != getExclusiveOwnerThread())
+               return false;
+           if (w + exclusiveCount(acquires) > MAX_COUNT)
+               throw new Error("Maximum lock count exceeded");
+           // Reentrant acquire
+           setState(c + acquires);
+           return true;
+       }
+       if (writerShouldBlock() ||
+           !compareAndSetState(c, c + acquires))
+           return false;
+       setExclusiveOwnerThread(current);
+       return true;
+   }
+   ```
+
