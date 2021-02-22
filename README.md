@@ -717,7 +717,7 @@ final boolean nonfairTryAcquire(int acquires) {
 ```
 `示例：c5.TestReentrantLock.java`  
 
-总结：公平性锁保证了锁的获取按照FIFO原则，而代价是进行大量的线程切换。非公平性锁虽 然可能造成线程“饥饿”，但极少的线程切换，保证了其更大的吞吐量。
+总结：公平性锁保证了锁的获取按照FIFO原则，而代价是进行大量的线程切换。非公平性锁虽然可能造成线程“饥饿”，但极少的线程切换，保证了其更大的吞吐量。
 
 ### 5.4 读写锁 ReentrantReadWriteLock
 特性：
@@ -726,20 +726,20 @@ final boolean nonfairTryAcquire(int acquires) {
 3. 锁降级：遵循获取写锁、获取读锁再释放写锁的次序，写锁能够降级成为读锁。
 
 #### 5.4.1 读写锁的接口示例
+展示内部工作状态的方法：
 * `int getReadLockCount()`: 返回当前读锁被获取的次数，该次数不等于获取读锁的线程数。
 * `int getReadHoldCount()`: 返回当前线程获取读锁的次数。Java6中加入，使用ThreadLocal保存
 * `boolean isWriteLock()`: 判断写锁还是读锁
 * `int getWriteHoldCount()`: 返回当前写锁被获取次数  
 
-`示例：c4.Cache.java`
+`示例：c5.Cache.java`
 
 #### 5.4.2 读写锁的实现分析
-
-1. 读写状态的设计  
+1. 读写状态的设计：  
    
    高位表示读，低位表示写。使用位移运算来获取状态，获取写`write = state & 0x0000FFFF`，获取读`read = state >>> 16`
 
-2. 写锁的获取与释放
+2. 写锁的获取与释放：
    
    ```java
    protected final boolean tryAcquire(int acquires) {

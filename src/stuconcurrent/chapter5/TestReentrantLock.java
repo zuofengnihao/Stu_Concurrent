@@ -10,7 +10,6 @@ public class TestReentrantLock {
     public static void main(String[] args) {
         ReentrantLock2 fairLock = new ReentrantLock2(true);
         ReentrantLock2 unfairLock = new ReentrantLock2(false);
-
     }
 
     private static class ReentrantLock2 extends ReentrantLock {
