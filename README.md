@@ -763,4 +763,111 @@ final boolean nonfairTryAcquire(int acquires) {
        return true;
    }
    ```
+   
+   3. 读锁的获取与释放：
+   
+      ```java
+      protected final int tryAcquireShared(int unused) {
+          for(;;) {}
+              int c = getStaus();
+              int nextc = c + (1 >> 16);
+              if (nextc < c) {
+                  throw new Error("Maximum lock count exceeded");
+              }
+              // 判断读锁是否被获取 并且 获取读锁的线程非当前线程
+              if (exclusiveCount(c) != 0 && owner != Thread.currentThread) {
+                  return -1;
+              }
+              if (compareAndSetState(c, nextc))
+                  return 1;       
+          }
+      ```
+   4. 锁降级
+   
+      ```java
+      public void processData() {
+          readLock.lock();
+          if (!update) {
+              // 必须先释放读锁
+              readLock.unLock();
+              // 锁降级从写锁获取开始
+              writeLock.lock();
+              try {
+                  if (!update) {
+                      // 准备数据的流程（略）
+                      update = true;
+                  }
+                  readLock.lock();
+              } finally {
+                  writeLock.unLock();
+              }
+              // 锁降级完成，写锁降级为读锁   
+          }
+          try {
+              // 使用数据的流程（略）
+          } finally {
+              readLock.unLock();
+          }
+      }
+      ```
+ 
+ ### 5.5 LockSupport工具
+ LockSupport提供的阻塞和唤醒方法：
+ 1. `void park()`:阻塞当前线程，如果调用`unpark(Thread thread)`方法或者当前线程被中断，才能从`park()`方法返回。
+ 2. `viod parkNanos(long nanos)`:阻塞当前线程，最长不超过nanos纳秒，返回条件在`park()`的基础上增加了超时返回。
+ 3. `void parkUntil(long deadline)`:阻塞当前线程，直到deadline时间（1970到deadline的毫秒值）
+ 4. `void unpark(Thread thread)`:唤醒阻塞状态的线程。
+ 
+ ### 5.6 Condition接口
+ Object的监视器方法与Condition接口的对比：
+ * 前置条件：
+   * Object：获取对象时
+   * Condition：调用`lock.lock()`获取锁，调用`Lock.newCondition()`获取Conditiond对象
+ * 调用方式：
+   * 直接调用，如object.wait()
+   * 直接调用，如condition.await()
+ * 等待队列个数：
+   * 一个
+   * 多个
+ * 当前线程释放锁并进入等待状态
+   * 支持
+   * 支持
+ * 当前线程释放锁并进入等待状态，在等待状态中不响应中断
+   * 不支持
+   * 支持
+ * 当前线程释放锁并进入等待状态到将来的某个时间
+   * 不支持
+   * 支持
+ * 唤醒等待队列中的一个线程
+   * 支持
+   * 支持
+ * 唤醒等待队列中的全部线程
+   * 支持
+   * 支持
+
+#### 5.6.1 Condition接口示例
+`示例: c5.BoundedQueue.java`
+
+#### 5.6.2 Condition的实现分析
+每个Condition都有一个自己的等待队列。
+
+1. 等待队列
+   等待队列是一个FIFO的队列，节点复用了同步队列。节点引用更新过程无CAS操作，因为都是加了锁的。  
+   一个对象拥有 **一个同步队列** 和 **多个等待队列**。  
+   Condition的实现是同步器的内部类，因此每个Condition实例都能访问同步器提供的方法，相当于每个Condition都拥所属同步器的引用。
+
+2. 等待  
+   `Condition.await()`方法：调用该方法的线程成功获取了锁的线程，也就是同步队列中的首节点，该方法会将当前 线程构造成节点并加入等待队列中，然后释放同步状态，唤醒同步队列中的后继节点，然后当 前线程会进入等待状态。  
+   如果从队列的角度去看，当前线程加入Condition的等待队列
+
+3. 唤醒
+   `Condition.signal()`方法：调用Condition的signal()方法，将会唤醒在等待队列中等待时间最长的节点（首节点），在 唤醒节点之前，会将节点移到同步队列中。调用该方法的前置条件是当前线程必须获取了锁，可以看到signal()方法进行了 isHeldExclusively()检查，也就是当前线程必须是获取了锁的线程。接着获取等待队列的首节点，将其移动到同步队列并使用LockSupport唤醒节点中的线程。  
+   节点从等待队列移动到同步队列的过程
+   
+### 5.7 本章小结
+详细地剖析了队列同步器、重入锁、读写锁以及 Condition等API和组件的实现细节，只有理解这些API和组件的实现细节才能够更加准确地运 用它们。
+
+## 第六章 Java并发容器和框架
+### 6.1 ConcurrentHashMap的实现原理与使用
+已过时，省略此节内容！！！！！
 
